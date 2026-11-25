@@ -33,6 +33,9 @@
     padding:9px 18px;border-radius:999px;font:inherit;cursor:pointer;transition:.2s;
   }
   button:hover,button:focus-visible{background:rgba(255,255,255,.18);border-color:var(--accent);outline:none}
+  .variations{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 16px 18px;max-width:860px}
+  .variations button{padding:7px 16px;font-size:.9rem;letter-spacing:.06em}
+  .variations button[aria-pressed=true]{background:var(--accent);color:#1a0b2e;border-color:var(--accent)}
   .sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px 28px;width:min(92vw,860px);padding:0 16px 18px}
   .sliders label{display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
   .sliders label span{display:flex;justify-content:space-between}
@@ -49,6 +52,7 @@
 <main>
   <svg id="m" viewBox="0 0 800 800" role="img" aria-label="Animated, colorful mandala"></svg>
 </main>
+<div class="variations" id="variations" role="group" aria-label="Mandala style"></div>
 <div class="sliders">
   <label><span>Hue <output id="o-hue"></output></span><input type="range" id="s-hue" min="0" max="360" value="290"></label>
   <label><span>Petals <output id="o-n"></output></span><input type="range" id="s-n" min="3" max="32" value="12"></label>
@@ -77,30 +81,68 @@ const el = (tag, attrs, parent) => {
 };
 const col = (h, s = 85, l = 62, a = 1) => `hsla(${(h % 360 + 360) % 360},${s}%,${l}%,${a})`;
 
+// layer: r = radius, shape, k = count multiplier, dur = spin seconds (negative = reverse), size, len
+const VARIATIONS = {
+  'Classic': { hue: 290, n: 12, rings: [360, 300, 250, 190, 120, 60], layers: [
+    { r: 355, shape: 'dots',    k: 2, dur: 160,  size: 4 },
+    { r: 320, shape: 'petal',   k: 1, dur: -120, size: 60, len: 70 },
+    { r: 270, shape: 'diamond', k: 1, dur: 90,   size: 26 },
+    { r: 225, shape: 'petal',   k: 1, dur: -70,  size: 56, len: 95 },
+    { r: 170, shape: 'circle',  k: 1, dur: 50,   size: 16 },
+    { r: 135, shape: 'petal',   k: 1, dur: -40,  size: 38, len: 70 },
+    { r: 80,  shape: 'star',    k: 1, dur: 30,   size: 28 } ] },
+  'Lotus': { hue: 330, n: 8, rings: [340, 260, 180, 100], layers: [
+    { r: 330, shape: 'lotus',  k: 1, dur: -150, size: 70, len: 130 },
+    { off: 1, r: 270, shape: 'lotus',  k: 1, dur: 110,  size: 64, len: 120 },
+    { r: 205, shape: 'lotus',  k: 1, dur: -80,  size: 56, len: 105 },
+    { off: 1, r: 140, shape: 'lotus',  k: 1, dur: 55,   size: 46, len: 85 },
+    { r: 80,  shape: 'lotus',  k: 1, dur: -35,  size: 34, len: 62 } ] },
+  'Starburst': { hue: 40, n: 16, rings: [350, 280, 200, 120], layers: [
+    { r: 350, shape: 'spoke',  k: 1, dur: 180,  size: 22 },
+    { off: 1, r: 300, shape: 'star',   k: 1, dur: -120, size: 24 },
+    { r: 235, shape: 'triangle', k: 1, dur: 90, size: 28 },
+    { off: 1, r: 170, shape: 'star',   k: 1, dur: -60,  size: 30 },
+    { r: 110, shape: 'diamond', k: 1, dur: 40,  size: 24 },
+    { off: 1, r: 60,  shape: 'star',   k: 1, dur: -25,  size: 20 } ] },
+  'Sacred Circles': { hue: 180, n: 12, rings: [345, 290, 230, 170, 110], layers: [
+    { r: 345, shape: 'dots',   k: 3, dur: 200,  size: 3 },
+    { r: 290, shape: 'ring',   k: 1, dur: -140, size: 22 },
+    { r: 230, shape: 'ring',   k: 1, dur: 100,  size: 28 },
+    { r: 170, shape: 'circle', k: 1, dur: -70,  size: 20 },
+    { r: 110, shape: 'ring',   k: 1, dur: 45,   size: 20 },
+    { r: 55,  shape: 'circle', k: 1, dur: -30,  size: 10 } ] },
+  'Geometric': { hue: 210, n: 10, rings: [350, 270, 190, 110], layers: [
+    { r: 350, shape: 'triangle', k: 1, dur: -170, size: 26 },
+    { off: 1, r: 285, shape: 'diamond',  k: 1, dur: 130,  size: 34 },
+    { r: 215, shape: 'triangle', k: 1, dur: -90,  size: 32 },
+    { off: 1, r: 145, shape: 'diamond',  k: 1, dur: 60,   size: 28 },
+    { r: 85,  shape: 'triangle', k: 1, dur: -35,  size: 22 } ] },
+  'Rainbow Arcs': { hue: 0, n: 14, rings: [345, 285, 225, 165, 105], layers: [
+    { r: 340, shape: 'arc',    k: 1, dur: 190,  size: 34 },
+    { r: 285, shape: 'arc',    k: 1, dur: -140, size: 30 },
+    { r: 225, shape: 'arc',    k: 1, dur: 100,  size: 26 },
+    { r: 165, shape: 'arc',    k: 1, dur: -65,  size: 22 },
+    { r: 105, shape: 'arc',    k: 1, dur: 40,   size: 18 },
+    { r: 55,  shape: 'circle', k: 1, dur: -25,  size: 9 } ] },
+};
+let current = 'Classic';
+
 function build() {
   svg.innerHTML = '';
   const outer = el('g', { class: 'breathe' });
   const root = el('g', { transform: `translate(${C} ${C}) scale(${scale}) translate(${-C} ${-C})` }, outer);
-  const layers = [
-    // radius, shape, count multiplier, spin duration (s, negative = reverse), size
-    { r: 355, shape: 'dots',    k: 2,   dur: 160, size: 4 },
-    { r: 320, shape: 'petal',   k: 1,   dur: -120, size: 60, len: 70 },
-    { r: 270, shape: 'diamond', k: 1,   dur: 90,  size: 26 },
-    { r: 225, shape: 'petal',   k: 1,   dur: -70, size: 56, len: 95 },
-    { r: 170, shape: 'circle',  k: 1,   dur: 50,  size: 16 },
-    { r: 135, shape: 'petal',   k: 1,   dur: -40, size: 38, len: 70 },
-    { r: 80,  shape: 'star',    k: 1,   dur: 30,  size: 28 },
-  ];
+  const V = VARIATIONS[current];
+  const layers = V.layers;
 
   // faint rings
-  [360, 300, 250, 190, 120, 60].forEach((r, i) =>
+  V.rings.forEach((r, i) =>
     el('circle', { cx: C, cy: C, r, fill: 'none', stroke: col(hue + i * 20, 70, 70, .25), 'stroke-width': 1 }, root));
 
   layers.forEach((L, li) => {
     const g = el('g', { class: 'spin', style: `animation-duration:${Math.abs(L.dur) / Math.max(speed, .01)}s;${speed === 0 ? 'animation-play-state:paused;' : ''}animation-direction:${L.dur < 0 ? 'reverse' : 'normal'};animation-play-state:${paused ? 'paused' : 'running'}` }, root);
     const count = n * L.k;
     for (let i = 0; i < count; i++) {
-      const ang = (360 / count) * i;
+      const ang = (360 / count) * (i + (L.off ? .5 : 0));
       const h = hue + li * 28 + i * (spread / count);
       const sub = el('g', { transform: `rotate(${ang} ${C} ${C}) translate(${C} ${C - L.r})` }, g);
       const fill = col(h, 85, 60, opacity), stroke = col(h + 30, 95, 78, .95);
@@ -122,6 +164,25 @@ function build() {
           pts.push(`${(Math.sin(a) * rr).toFixed(1)},${(-Math.cos(a) * rr).toFixed(1)}`);
         }
         el('polygon', { points: pts.join(' '), fill, stroke, 'stroke-width': 1.5 }, sub);
+      } else if (L.shape === 'lotus') {
+        // pointed, flame-like petal
+        const w = L.size / 2, l = L.len;
+        el('path', { d: `M0 ${l/2} Q ${w*1.6} ${l*.05} 0 ${-l/2} Q ${-w*1.6} ${l*.05} 0 ${l/2} Z`, fill, stroke, 'stroke-width': 1.5 }, sub);
+        el('path', { d: `M0 ${l/2} Q ${w*.7} ${l*.05} 0 ${-l/2+14} Q ${-w*.7} ${l*.05} 0 ${l/2} Z`, fill: 'none', stroke: col(h + 60, 100, 85, .7), 'stroke-width': 1 }, sub);
+      } else if (L.shape === 'triangle') {
+        const s = L.size;
+        el('path', { d: `M0 ${-s} L${s*.85} ${s*.6} L${-s*.85} ${s*.6} Z`, fill, stroke, 'stroke-width': 1.5 }, sub);
+        el('circle', { cy: s * .1, r: s * .18, fill: stroke }, sub);
+      } else if (L.shape === 'ring') {
+        el('circle', { r: L.size, fill: 'none', stroke, 'stroke-width': 2.5 }, sub);
+        el('circle', { r: L.size * .55, fill, stroke, 'stroke-width': 1 }, sub);
+      } else if (L.shape === 'arc') {
+        const s = L.size;
+        el('path', { d: `M${-s} 0 A ${s} ${s} 0 0 1 ${s} 0`, fill: 'none', stroke, 'stroke-width': 3, 'stroke-linecap': 'round' }, sub);
+        el('path', { d: `M${-s*.6} 0 A ${s*.6} ${s*.6} 0 0 1 ${s*.6} 0`, fill: 'none', stroke: fill, 'stroke-width': 3, 'stroke-linecap': 'round' }, sub);
+      } else if (L.shape === 'spoke') {
+        el('path', { d: `M0 ${-L.size} L0 ${L.size}`, stroke, 'stroke-width': 2, 'stroke-linecap': 'round' }, sub);
+        el('circle', { cy: -L.size, r: 4, fill: stroke }, sub);
       } else {
         el('circle', { r: L.size, fill: stroke }, sub);
       }
@@ -156,6 +217,21 @@ for (const k in sliders) {
     build();
   });
 }
+const varBox = document.getElementById('variations');
+function pick(name) {
+  current = name;
+  hue = VARIATIONS[name].hue; n = VARIATIONS[name].n;
+  sync('hue', hue); sync('n', n);
+  varBox.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.textContent === name));
+  build();
+}
+Object.keys(VARIATIONS).forEach(name => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => pick(name);
+  varBox.appendChild(b);
+});
+
 document.getElementById('shuffle').onclick = () => { hue = Math.random() * 360; sync('hue', Math.round(hue)); build(); };
 document.getElementById('petals').onclick = () => { n = [6, 8, 10, 12, 16, 18, 24][Math.floor(Math.random() * 7)]; sync('n', n); build(); };
 document.getElementById('pause').onclick = e => {
@@ -163,7 +239,7 @@ document.getElementById('pause').onclick = e => {
   e.target.textContent = paused ? 'Play' : 'Pause';
   svg.querySelectorAll('.spin').forEach(g => g.style.animationPlayState = paused ? 'paused' : 'running');
 };
-build();
+pick('Classic');
 </script>
 </body>
 </html>
