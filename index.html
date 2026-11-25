@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mandala</title>
+<style>
+  :root{
+    --bg1:#1a0b2e; --bg2:#05010d; --ink:#f4e9ff; --muted:#b9a6d6;
+    --accent:#ffb86b;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(circle at 50% 40%,var(--bg1),var(--bg2) 70%);
+    color:var(--ink);
+    font-family:Georgia,"Times New Roman",serif;
+    display:flex;flex-direction:column;align-items:center;
+    min-height:100vh;overflow-x:hidden;
+  }
+  header{text-align:center;padding:28px 16px 0}
+  h1{font-weight:400;letter-spacing:.5em;text-transform:uppercase;font-size:clamp(1.2rem,3vw,2rem);padding-left:.5em}
+  header p{color:var(--muted);font-style:italic;margin-top:8px;font-size:.95rem}
+  main{flex:1;display:grid;place-items:center;width:100%;padding:16px}
+  svg{width:min(88vmin,760px);height:auto;filter:drop-shadow(0 0 30px rgba(255,150,220,.25))}
+  .spin{transform-origin:400px 400px;animation:spin linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .breathe{transform-origin:400px 400px;animation:breathe 8s ease-in-out infinite}
+  @keyframes breathe{50%{transform:scale(1.03)}}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;padding:0 16px 28px}
+  button{
+    background:rgba(255,255,255,.06);color:var(--ink);border:1px solid rgba(255,255,255,.25);
+    padding:9px 18px;border-radius:999px;font:inherit;cursor:pointer;transition:.2s;
+  }
+  button:hover,button:focus-visible{background:rgba(255,255,255,.18);border-color:var(--accent);outline:none}
+  .sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px 28px;width:min(92vw,860px);padding:0 16px 18px}
+  .sliders label{display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .sliders label span{display:flex;justify-content:space-between}
+  .sliders output{color:var(--accent);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+  @media (prefers-reduced-motion:reduce){.spin,.breathe{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mandala</h1>
+  <p>breathe in · breathe out</p>
+</header>
+<main>
+  <svg id="m" viewBox="0 0 800 800" role="img" aria-label="Animated, colorful mandala"></svg>
+</main>
+<div class="sliders">
+  <label><span>Hue <output id="o-hue"></output></span><input type="range" id="s-hue" min="0" max="360" value="290"></label>
+  <label><span>Petals <output id="o-n"></output></span><input type="range" id="s-n" min="3" max="32" value="12"></label>
+  <label><span>Speed <output id="o-speed"></output></span><input type="range" id="s-speed" min="0" max="300" value="100"></label>
+  <label><span>Size <output id="o-size"></output></span><input type="range" id="s-size" min="50" max="130" value="100"></label>
+  <label><span>Opacity <output id="o-op"></output></span><input type="range" id="s-op" min="10" max="100" value="55"></label>
+  <label><span>Color spread <output id="o-spread"></output></span><input type="range" id="s-spread" min="0" max="360" value="120"></label>
+</div>
+<div class="controls">
+  <button id="shuffle">New palette</button>
+  <button id="petals">Change petals</button>
+  <button id="pause">Pause</button>
+</div>
+
+<script>
+const svg = document.getElementById('m');
+const NS = 'http://www.w3.org/2000/svg';
+const C = 400;
+let hue = 290, n = 12, paused = false, speed = 1, scale = 1, opacity = .55, spread = 120;
+
+const el = (tag, attrs, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || svg).appendChild(e);
+  return e;
+};
+const col = (h, s = 85, l = 62, a = 1) => `hsla(${(h % 360 + 360) % 360},${s}%,${l}%,${a})`;
+
+function build() {
+  svg.innerHTML = '';
+  const outer = el('g', { class: 'breathe' });
+  const root = el('g', { transform: `translate(${C} ${C}) scale(${scale}) translate(${-C} ${-C})` }, outer);
+  const layers = [
+    // radius, shape, count multiplier, spin duration (s, negative = reverse), size
+    { r: 355, shape: 'dots',    k: 2,   dur: 160, size: 4 },
+    { r: 320, shape: 'petal',   k: 1,   dur: -120, size: 60, len: 70 },
+    { r: 270, shape: 'diamond', k: 1,   dur: 90,  size: 26 },
+    { r: 225, shape: 'petal',   k: 1,   dur: -70, size: 56, len: 95 },
+    { r: 170, shape: 'circle',  k: 1,   dur: 50,  size: 16 },
+    { r: 135, shape: 'petal',   k: 1,   dur: -40, size: 38, len: 70 },
+    { r: 80,  shape: 'star',    k: 1,   dur: 30,  size: 28 },
+  ];
+
+  // faint rings
+  [360, 300, 250, 190, 120, 60].forEach((r, i) =>
+    el('circle', { cx: C, cy: C, r, fill: 'none', stroke: col(hue + i * 20, 70, 70, .25), 'stroke-width': 1 }, root));
+
+  layers.forEach((L, li) => {
+    const g = el('g', { class: 'spin', style: `animation-duration:${Math.abs(L.dur) / Math.max(speed, .01)}s;${speed === 0 ? 'animation-play-state:paused;' : ''}animation-direction:${L.dur < 0 ? 'reverse' : 'normal'};animation-play-state:${paused ? 'paused' : 'running'}` }, root);
+    const count = n * L.k;
+    for (let i = 0; i < count; i++) {
+      const ang = (360 / count) * i;
+      const h = hue + li * 28 + i * (spread / count);
+      const sub = el('g', { transform: `rotate(${ang} ${C} ${C}) translate(${C} ${C - L.r})` }, g);
+      const fill = col(h, 85, 60, opacity), stroke = col(h + 30, 95, 78, .95);
+      if (L.shape === 'petal') {
+        const w = L.size / 2, l = L.len;
+        el('path', { d: `M0 ${l/2} C ${w*1.4} ${l*.2}, ${w*1.1} ${-l*.35}, 0 ${-l/2} C ${-w*1.1} ${-l*.35}, ${-w*1.4} ${l*.2}, 0 ${l/2} Z`, fill, stroke, 'stroke-width': 1.5 }, sub);
+        el('path', { d: `M0 ${l/2-6} L0 ${-l/2+10}`, stroke: col(h + 60, 100, 85, .8), 'stroke-width': 1 }, sub);
+      } else if (L.shape === 'diamond') {
+        const s = L.size;
+        el('path', { d: `M0 ${-s} L${s*.6} 0 L0 ${s} L${-s*.6} 0 Z`, fill, stroke, 'stroke-width': 1.5 }, sub);
+        el('circle', { r: 3, fill: stroke }, sub);
+      } else if (L.shape === 'circle') {
+        el('circle', { r: L.size, fill, stroke, 'stroke-width': 1.5 }, sub);
+        el('circle', { r: L.size / 3, fill: stroke }, sub);
+      } else if (L.shape === 'star') {
+        const pts = [], s = L.size;
+        for (let p = 0; p < 8; p++) {
+          const a = p * Math.PI / 4, rr = p % 2 ? s * .4 : s;
+          pts.push(`${(Math.sin(a) * rr).toFixed(1)},${(-Math.cos(a) * rr).toFixed(1)}`);
+        }
+        el('polygon', { points: pts.join(' '), fill, stroke, 'stroke-width': 1.5 }, sub);
+      } else {
+        el('circle', { r: L.size, fill: stroke }, sub);
+      }
+    }
+  });
+
+  // center
+  const cg = el('g', {}, root);
+  el('circle', { cx: C, cy: C, r: 34, fill: col(hue + 180, 90, 65, .9), stroke: '#fff', 'stroke-width': 2 }, cg);
+  el('circle', { cx: C, cy: C, r: 20, fill: col(hue + 220, 95, 45), stroke: col(hue, 100, 85), 'stroke-width': 2 }, cg);
+  el('circle', { cx: C, cy: C, r: 7, fill: '#fff' }, cg);
+}
+
+const sliders = {
+  hue:    { v: v => hue = +v,           f: v => Math.round(v) + '°' },
+  n:      { v: v => n = +v,             f: v => v },
+  speed:  { v: v => speed = v / 100,    f: v => (v / 100).toFixed(1) + '×' },
+  size:   { v: v => scale = v / 100,    f: v => v + '%' },
+  op:     { v: v => opacity = v / 100,  f: v => v + '%' },
+  spread: { v: v => spread = +v,        f: v => v + '°' },
+};
+const sync = (k, val) => {
+  document.getElementById('s-' + k).value = val;
+  document.getElementById('o-' + k).textContent = sliders[k].f(val);
+};
+for (const k in sliders) {
+  const inp = document.getElementById('s-' + k);
+  document.getElementById('o-' + k).textContent = sliders[k].f(inp.value);
+  inp.addEventListener('input', () => {
+    sliders[k].v(inp.value);
+    document.getElementById('o-' + k).textContent = sliders[k].f(inp.value);
+    build();
+  });
+}
+document.getElementById('shuffle').onclick = () => { hue = Math.random() * 360; sync('hue', Math.round(hue)); build(); };
+document.getElementById('petals').onclick = () => { n = [6, 8, 10, 12, 16, 18, 24][Math.floor(Math.random() * 7)]; sync('n', n); build(); };
+document.getElementById('pause').onclick = e => {
+  paused = !paused;
+  e.target.textContent = paused ? 'Play' : 'Pause';
+  svg.querySelectorAll('.spin').forEach(g => g.style.animationPlayState = paused ? 'paused' : 'running');
+};
+build();
+</script>
+</body>
+</html>
